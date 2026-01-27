@@ -1,88 +1,772 @@
 <!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <link rel="stylesheet" href="./static/css/styles.css" />
-        <meta
-            http-equiv="Content-Security-Policy"
-            content="default-src * 'unsafe-inline' 'unsafe-eval'"
-        />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Tauri App</title>
-        <script src="./static/js/main.js"></script>
-    </head>
-    <body>
-        <main class="container">
-            <h1>Welcome to TauriMan</h1>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>☁️ 你的专属云端乐园</title>
+    <link href="https://fonts.googleapis.com/css2?family=Zcool+KuaiLe&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #ff9a9e; --secondary: #fad0c4; --accent: #a18cd1; --text-main: #555;
+            --glass-bg: rgba(255, 255, 255, 0.65); --glass-border: rgba(255, 255, 255, 0.4);
+            --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.05);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+        body {
+            font-family: 'Zcool KuaiLe', sans-serif;
+            background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+            height: 100vh; overflow: hidden; display: flex; justify-content: center;
+            color: var(--text-main); transition: background 1s, color 1s; overscroll-behavior: none;
+        }
+        /* 天气适配 */
+        body.rainy { background: linear-gradient(to bottom, #2c3e50, #4ca1af); color: #fff; }
+        body.rainy .card { background: rgba(0,0,0,0.25); border-color: rgba(255,255,255,0.1); color: #fff; }
+        body.rainy .btn-outline { background: rgba(255,255,255,0.1); color: #fff; border-color: rgba(255,255,255,0.2); }
+        body.snowy { background: linear-gradient(to bottom, #83a4d4, #b6fbff); }
+        body.rainbow { background: linear-gradient(135deg, #ff9a9e, #fad0c4, #a18cd1); }
 
-            <div class="row">
-                <a
-                    href="https://tauri.app"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                >
-                    <img
-                        src="./assets/tauri.svg"
-                        class="logo tauri"
-                        alt="Tauri logo"
-                    />
-                </a>
-                <a
-                    href="https://pakeplus.com/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                >
-                    <img
-                        src="https://hk.gh-proxy.org/https://github.com/Sjj1024/PakePlus/blob/main/app-icon.png"
-                        class="logo vanilla"
-                        alt="JavaScript logo"
-                    />
-                </a>
+        .ambient-bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -2; background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.4), transparent 80%); animation: breatheBg 8s ease-in-out infinite; }
+        @keyframes breatheBg { 0%,100%{transform:scale(1);} 50%{transform:scale(1.2);} }
+
+        /* 画布层级管理 */
+        #weather-canvas, #lantern-canvas, #fx-canvas, #ripple-canvas { position: fixed; inset: 0; pointer-events: none; }
+        #weather-canvas { z-index: -1; }
+        #ripple-canvas { z-index: -1; opacity: 0.6; } /* [新增] 涟漪画布 */
+        #lantern-canvas { z-index: 1500; }
+        #fx-canvas { z-index: 2000; }
+
+        /* [新增] 云朵传书层 */
+        #cloud-layer { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+        .cloud-msg {
+            position: absolute; background: rgba(255,255,255,0.7); border-radius: 30px;
+            padding: 8px 16px; cursor: pointer; pointer-events: auto;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05); font-size: 20px; color: #888;
+            backdrop-filter: blur(5px); display: flex; align-items: center; justify-content: center;
+        }
+        .cloud-msg:hover { background: #fff; transform: scale(1.1); }
+
+        .app-shell { width: 100%; max-width: 500px; height: 100%; position: relative; display: flex; flex-direction: column; filter: blur(20px); transform: scale(1.02); transition: filter 0.5s ease-out, transform 0.8s; }
+        .page { position: absolute; inset: 0; padding: 20px 20px 120px; overflow-y: auto; opacity: 0; transform: translateY(15px) scale(0.98); transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1); pointer-events: none; scrollbar-width: none; }
+        .page.active { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+
+        .card { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 28px; padding: 24px; margin-bottom: 20px; box-shadow: var(--shadow-card); backdrop-filter: blur(20px); position: relative; overflow: hidden; transition: 0.3s; }
+        .card:active { transform: scale(0.99); }
+        .card-title { font-size: 18px; margin-bottom: 16px; color: #7b68ee; display: flex; align-items: center; gap: 8px; letter-spacing: 1px; }
+        body.rainy .card-title { color: #fff; }
+
+        .btn { background: linear-gradient(120deg, #a18cd1 0%, #fbc2eb 100%); border: none; padding: 12px 24px; border-radius: 50px; color: #fff; font-size: 15px; cursor: pointer; transition: 0.2s; box-shadow: 0 6px 15px rgba(161, 140, 209, 0.4); }
+        .btn:active { transform: scale(0.9); }
+        .btn-outline { background: rgba(255,255,255,0.8); color: #666; border: 1px solid #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.03); }
+
+        /* 信件样式 */
+        .letter-trigger {
+            width: 100%; text-align: center; margin-bottom: 15px; cursor: pointer;
+            animation: float 3s ease-in-out infinite; opacity: 0.8; transition: 0.3s;
+        }
+        .letter-trigger:hover { opacity: 1; transform: scale(1.05); }
+        .letter-icon { font-size: 40px; filter: drop-shadow(0 5px 10px rgba(255,105,180,0.3)); }
+        .letter-hint { font-size: 12px; color: #888; margin-top: 5px; }
+
+        #letter-modal {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 8000;
+            display: none; align-items: center; justify-content: center; backdrop-filter: blur(8px);
+        }
+        .letter-paper {
+            background: #fff; width: 85%; max-width: 400px; padding: 30px; border-radius: 20px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.2); position: relative;
+            background-image: linear-gradient(#f1f1f1 1px, transparent 1px); background-size: 100% 30px;
+            transform: translateY(20px); opacity: 0; transition: 0.5s;
+        }
+        .letter-paper.open { transform: translateY(0); opacity: 1; }
+        .close-letter { position: absolute; top: 15px; right: 20px; font-size: 24px; color: #999; cursor: pointer; }
+
+        /* 受气包 */
+        .punch-char { font-size: 80px; text-align: center; transition: 0.1s; cursor: pointer; display: inline-block; }
+        .punch-char.hit { transform: scale(0.8) rotate(15deg); }
+        .hp-bar-bg { width: 80%; height: 10px; background: #eee; border-radius: 10px; margin: 10px auto; overflow: hidden; }
+        .hp-bar { width: 100%; height: 100%; background: #ff9a9e; transition: 0.2s; }
+
+        /* 逃跑按钮 */
+        .runaway-box { display: flex; justify-content: space-around; margin-top: 20px; height: 50px; position: relative; }
+        .runaway-btn { position: absolute; right: 20px; transition: 0.1s; }
+
+        /* 诚实魔镜 */
+        .mirror-box {
+            width: 140px; height: 180px; background: #ddd; margin: 0 auto; border-radius: 60px 60px 20px 20px;
+            border: 6px solid #ffd700; position: relative; overflow: hidden; cursor: pointer;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.1), 0 10px 20px rgba(0,0,0,0.1);
+        }
+        .mirror-cover { position: absolute; inset: 0; background: #ccc; display: flex; align-items: center; justify-content: center; transition: 0.8s; z-index: 2; color: #fff; font-size: 40px; }
+        .mirror-content { position: absolute; inset: 0; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1; }
+
+        /* 爱意天平 */
+        .scale-sys { width: 100%; height: 120px; position: relative; display: flex; align-items: flex-end; justify-content: center; margin-top: 20px; }
+        .scale-pole { width: 6px; height: 80px; background: #555; position: absolute; bottom: 0; }
+        .scale-bar { width: 200px; height: 4px; background: #555; position: absolute; top: 40px; transition: transform 0.5s cubic-bezier(0.5, 1.5, 0.5, 1); }
+        .scale-plate { width: 60px; height: 40px; border-bottom: 2px solid #555; border-radius: 0 0 30px 30px; position: absolute; top: 4px; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+        .scale-plate.left { left: 0; } .scale-plate.right { right: 0; }
+
+        /* 其他原有组件 */
+        .weather-bar { display: flex; justify-content: space-between; background: rgba(255,255,255,0.4); padding: 8px; border-radius: 20px; margin-bottom: 10px; }
+        .w-btn { font-size: 20px; padding: 8px 15px; border-radius: 15px; cursor: pointer; transition: 0.2s; text-align: center; }
+        .w-btn.active { background: #fff; transform: scale(1.1); color: var(--accent); }
+        .bubble-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; justify-items: center; }
+        .bubble { width: 45px; height: 45px; border-radius: 50%; background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.9), rgba(255,255,255,0.4)); box-shadow: inset 0 0 10px rgba(0,0,0,0.1); cursor: pointer; }
+        .bubble.popped { background: rgba(255,255,255,0.2); transform: scale(0.9); }
+        .oracle-book { width: 120px; height: 160px; background: linear-gradient(45deg, #667eea, #764ba2); border-radius: 5px 15px 15px 5px; margin: 0 auto; cursor: pointer; position: relative; color: #fff; text-align: center; padding: 15px; display:flex; align-items:center; justify-content:center; }
+        .oracle-book.shake { animation: bookShake 0.5s ease-in-out; } @keyframes bookShake { 0%{transform:rotate(0)} 25%{transform:rotate(5deg)} 75%{transform:rotate(-5deg)} 100%{transform:rotate(0)} }
+
+        .aid-grid { display: flex; justify-content: space-around; gap: 10px; }
+        .aid-item { text-align: center; cursor: pointer; padding: 10px; border-radius: 15px; background: rgba(255,255,255,0.5); width: 30%; }
+        .radio-box { background: #333; border-radius: 20px; padding: 15px; color: #fff; text-align: center; }
+        .radio-controls { display: flex; justify-content: center; gap: 15px; }
+        .radio-btn { width: 40px; height: 40px; border-radius: 50%; background: #555; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .radio-btn.active { background: var(--accent); }
+
+        .pet-stage { height: 200px; display: flex; justify-content: center; align-items: center; background: radial-gradient(circle, rgba(255,255,255,0.5) 20%, transparent 70%); border-radius: 50%; }
+        .pet-body { width: 140px; height: 140px; background: #fff; border-radius: 50%; position: relative; box-shadow: 0 15px 35px rgba(0,0,0,0.08); transition: 0.3s; }
+        .pet-ear { position: absolute; top:-10px; width:40px; height:40px; background:#fff; border-radius:50% 50% 0 0; }
+        .pet-ear.L { left:15px; transform:rotate(-15deg); } .pet-ear.R { right:15px; transform:rotate(15deg); }
+        .face { position: relative; top:50px; text-align:center; }
+        .eye { width:22px; height:22px; background:#333; border-radius:50%; display:inline-block; margin:0 12px; position:relative; overflow:hidden; transition: height 0.1s; }
+        .pupil { width:8px; height:8px; background:#fff; border-radius:50%; position:absolute; top:4px; left:4px; }
+        .mouth { width:20px; height:10px; background:#ff9a9e; border-radius:0 0 20px 20px; margin:12px auto 0; }
+        .blush { position: absolute; top:58px; width:20px; height:10px; background:#ff9a9e; border-radius:50%; opacity:0.3; filter:blur(2px); }
+        .blush.L { left:25px; } .blush.R { right:25px; }
+
+        canvas.game-canvas { width: 100%; border-radius: 20px; touch-action: none; cursor: crosshair; }
+        #gravity-canvas { height: 220px; background: rgba(255,255,255,0.3); } #hole-canvas { height: 180px; background: #1a1a2e; } #star-canvas { height: 250px; background: #2c3e50; } #knot-canvas { width: 100%; height: 220px; cursor: pointer; }
+
+        .fruit-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 15px; }
+        .fruit-btn { background: rgba(255,255,255,0.7); border-radius: 18px; padding: 12px 5px; text-align: center; font-size: 12px; cursor: pointer; }
+        .f-icon { font-size: 26px; display: block; margin-bottom: 6px; }
+
+        .bottle-container { height: 180px; position: relative; overflow: hidden; background: linear-gradient(to top, #4ca1af, #c4e0e5); border-radius: 15px; display: flex; align-items: center; justify-content: center; }
+        .bottle { font-size: 40px; position: absolute; transition: 2s; cursor: pointer; }
+        .bottle-wave { position: absolute; bottom: 0; width: 200%; height: 50px; background: rgba(255,255,255,0.3); animation: wave 3s infinite linear; }
+        @keyframes wave { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+
+        .piano-keys { display: flex; gap: 8px; height: 100px; }
+        .key { flex: 1; background: #fff; border-radius: 0 0 15px 15px; cursor: pointer; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 15px; color: #ccc; }
+        .key.active { height: 95px; background: var(--accent); color: #fff; }
+
+        .dock-wrapper { position: fixed; bottom: 25px; left: 0; width: 100%; display: flex; justify-content: center; z-index: 100; pointer-events: none; }
+        .dock { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(20px); padding: 10px 30px; border-radius: 50px; display: flex; gap: 35px; box-shadow: 0 15px 40px rgba(0,0,0,0.08); pointer-events: auto; border: 1px solid rgba(255,255,255,0.6); }
+        .dock-item { font-size: 26px; opacity: 0.4; transition: 0.3s; cursor: pointer; position: relative; }
+        .dock-item.active { opacity: 1; transform: translateY(-8px) scale(1.15); }
+        .dock-item.active::after { content: ''; position: absolute; bottom: -12px; left: 50%; transform: translateX(-50%); width: 5px; height: 5px; background: var(--accent); border-radius: 50%; }
+
+        #tear-layer { position: fixed; inset: 0; z-index: 9999; cursor: crosshair; touch-action: none; transition: opacity 1.5s; }
+        .tear-hint { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; pointer-events: none; color: #5d7599; text-shadow: 0 2px 10px rgba(255,255,255,0.8); animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100%{opacity:0.6} 50%{opacity:1} }
+        #toast { position: fixed; top: 40px; left: 50%; transform: translateX(-50%) translateY(-100px); background: #fff; padding: 12px 24px; border-radius: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); z-index: 5000; display: flex; align-items: center; gap: 10px; transition: 0.5s; }
+        #toast.show { transform: translateX(-50%) translateY(0); }
+        .gear-btn { position: fixed; top: 20px; right: 20px; font-size: 22px; opacity: 0.4; z-index: 500; cursor: pointer; }
+        #settings-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 6000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+        .modal-box { background: #fff; padding: 30px; border-radius: 25px; width: 85%; max-width: 320px; text-align: center; }
+        .modal-input { width: 100%; padding: 12px; border: 1px solid #eee; border-radius: 12px; margin: 10px 0; background: #f9f9f9; text-align: center; outline: none; }
+    </style>
+</head>
+<body>
+
+<div class="ambient-bg"></div>
+<div id="cloud-layer"></div> <canvas id="weather-canvas"></canvas>
+<canvas id="lantern-canvas"></canvas>
+<canvas id="ripple-canvas"></canvas> <canvas id="fx-canvas"></canvas>
+
+<div id="tear-layer">
+    <canvas id="tear-canvas"></canvas>
+    <div class="tear-hint">
+        <div style="font-size:50px; margin-bottom:10px; filter: blur(1px);">😢</div>
+        <p style="font-size:18px; color:#5d7599; font-weight:bold; letter-spacing:1px;">眼泪模糊了视线...</p>
+        <p style="font-size:14px; margin-top:8px; opacity:0.8;">请帮我擦干，看看真实的你</p>
+    </div>
+</div>
+
+<div id="toast"><span>🌈</span> <span id="t-msg">Ready</span></div>
+<div class="gear-btn" onclick="openSettings()">⚙️</div>
+
+<div class="app-shell" id="main-app">
+
+    <div id="page-home" class="page active">
+        <div class="card" style="margin-top: 40px;">
+            <div class="card-title">🌤️ 心情天气控制器</div>
+            <div class="weather-bar">
+                <div class="w-btn active" onclick="setWeather('sunny', this)">☀️<br><span>晴朗</span></div>
+                <div class="w-btn" onclick="setWeather('rainy', this)">🌧️<br><span>雨天</span></div>
+                <div class="w-btn" onclick="setWeather('snowy', this)">❄️<br><span>下雪</span></div>
+                <div class="w-btn" onclick="setWeather('rainbow', this)">🌈<br><span>彩虹</span></div>
             </div>
-            <p>Click to get data</p>
-            <form class="row" id="greet-form">
-                <input id="greet-input" placeholder="Enter a name..." />
-                <button type="submit" id="getdata">GET DATA</button>
-            </form>
-            <div class="functions">
-                <a href="./book.html" target="_self">跳转到book.html</a>
-                <a
-                    href="https://www.baidu.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    >跳到百度blank
-                </a>
-                <a
-                    href="https://www.baidu.com"
-                    target="_self"
-                    rel="noopener noreferrer"
-                >
-                    跳到百度self
-                </a>
-                <button onclick="sayHello()">点击我</button>
-                <button onclick="sayHello()">下载文件</button>
-                <button onclick="sayHello()">上传文件</button>
-                <button onclick="sayHello()">访问相机</button>
-                <button onclick="sayHello()">访问麦克风</button>
-                <button onclick="sayHello()">访问相册</button>
-                <button class="btn" onclick="openWechat()">打开微信</button>
-                <button class="btn" onclick="openWechatScan()">
-                    打开扫一扫
-                </button>
-                <button class="btn" onclick="openZhihu()">打开知乎</button>
-                <button onclick="sayHello()">打开抖音</button>
-                <button onclick="sayHello()">用浏览器打开</button>
-                <button>打开知乎</button>
+        </div>
+
+        <div class="letter-trigger" onclick="openLetter()">
+            <div class="letter-icon">💌</div>
+            <div class="letter-hint">有一封给你的信 (点击拆开)</div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">🏠 守护萌宠</div>
+            <div class="pet-stage" onclick="petTap()">
+                <div class="pet-body" id="pet">
+                    <div class="pet-ear L"></div><div class="pet-ear R"></div>
+                    <div class="blush L"></div><div class="blush R"></div>
+                    <div class="face">
+                        <div class="eye"><div class="pupil" id="pl"></div></div>
+                        <div class="eye"><div class="pupil" id="pr"></div></div>
+                        <div class="mouth" id="mouth"></div>
+                    </div>
+                </div>
             </div>
-            <p id="greet-msg"></p>
-            <img src="./static/image/cursor.jpeg" alt="logo" />
-            <video
-                src="https://hk.gh-proxy.org/https://github.com/Sjj1024/PakePlus/blob/main/docs/static/videos/pakeplus.mp4"
-                autoplay
-                controls
-                style="width: 100%; height: 100%"
-            ></video>
-            <audio src="./static/music/yin.mp3" controls></audio>
-        </main>
-    </body>
+            <div style="display:flex; justify-content:center; gap:10px; margin-top:20px;">
+                <button class="btn-outline" style="border-radius:20px; padding:5px 15px; cursor:pointer;" onclick="petAct('hug')">🤗 抱抱</button>
+                <button class="btn-outline" style="border-radius:20px; padding:5px 15px; cursor:pointer;" onclick="petAct('feed')">🍖 投喂</button>
+                <button class="btn-outline" style="border-radius:20px; padding:5px 15px; cursor:pointer;" onclick="togglePet()">🪄 变身</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">🤔 原谅我好不好？</div>
+            <div class="runaway-box">
+                <button class="btn" onclick="forgive()" style="position:absolute; left:20px;">好呀 ❤️</button>
+                <button class="btn btn-outline runaway-btn" onmouseover="runButton(this)" ontouchstart="runButton(this)">不好 😝</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">📜 电子保证书</div>
+            <div style="background:#fff; padding:20px; transform:rotate(-1deg); border-radius:15px; text-align:center; border:1px dashed #ddd; box-shadow:0 5px 15px rgba(0,0,0,0.03);">
+                <p style="line-height:1.8; color:#555; font-size:14px;">
+                    甲方(田宁)承诺：以后做你的出气筒。<br>
+                    乙方(王奕婷)承诺：擦干眼泪，原谅笨蛋，要开开心心的，不哭。
+                </p>
+                <div id="fingerprint" onclick="signPromise(this)"
+                     style="width:50px; height:70px; border:2px dashed var(--accent); margin:20px auto 5px;
+                            display:flex; align-items:center; justify-content:center; color:var(--accent); cursor:pointer; border-radius:10px;">
+                    按
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="page-fun" class="page">
+        <div class="card" style="margin-top: 40px;">
+            <div class="card-title">🥊 专属受气包</div>
+            <div style="text-align:center;">
+                <div class="punch-char" onclick="punch(this)">🤡</div>
+                <div class="hp-bar-bg"><div class="hp-bar" id="hp-bar"></div></div>
+                <p id="punch-msg" style="font-size:12px; color:#aaa; margin-top:5px;">用力戳他出气！</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">🔮 诚实魔镜</div>
+            <div class="mirror-box" onclick="revealMirror()">
+                <div class="mirror-cover" id="mirror-cover">❔</div>
+                <div class="mirror-content">
+                    <div style="font-size:20px; color:var(--primary); font-weight:bold;">王奕婷</div>
+                    <div style="font-size:12px; color:#aaa;">(世上最可爱)</div>
+                </div>
+            </div>
+            <p style="text-align:center; font-size:12px; color:#aaa; margin-top:5px;">魔镜魔镜，谁最可爱？</p>
+        </div>
+
+        <div class="card">
+            <div class="card-title">🫧 无限捏泡泡</div>
+            <div class="bubble-grid" id="bubble-wrap"></div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">🍊 哄人水果铺</div>
+            <div class="fruit-grid">
+                <div class="fruit-btn" onclick="fAct('durian', this)"><span class="f-icon">🍈</span>跪键盘</div>
+                <div class="fruit-btn" onclick="fAct('orange', this)"><span class="f-icon">🍊</span>好运签</div>
+                <div class="fruit-btn" onclick="fAct('watermelon', this)"><span class="f-icon">🍉</span>降火雨</div>
+                <div class="fruit-btn" onclick="fAct('cherry', this)"><span class="f-icon">🍒</span>不分离</div>
+                <div class="fruit-btn" onclick="fAct('mangosteen', this)"><span class="f-icon">🥥</span>小公主</div>
+                <div class="fruit-btn" onclick="fAct('grape', this)"><span class="f-icon">🍇</span>戳气泡</div>
+                <div class="fruit-btn" onclick="fAct('strawberry', this)"><span class="f-icon">🍓</span>甜甜哒</div>
+                <div class="fruit-btn" onclick="fAct('kiwi', this)"><span class="f-icon">🥝</span>毛茸茸</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">🍓 重力水果缸</div>
+            <canvas id="gravity-canvas" class="game-canvas"></canvas>
+        </div>
+
+        <div class="card">
+            <div class="card-title">🎁 情绪贩卖机</div>
+            <div style="background:linear-gradient(to right, #ff9a9e, #fecfef); padding:20px; border-radius:20px; text-align:center; color:white;">
+                <div style="background:rgba(255,255,255,0.2); height:70px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:35px; margin-bottom:15px;">
+                    <span id="vm-res">❓</span>
+                </div>
+                <button class="btn" style="background:#fff; color:#ff9a9e;" onclick="playVm()">投币获取快乐</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="page-calm" class="page">
+        <div class="card" style="margin-top: 40px;">
+            <div class="card-title">🧶 解开心结 (抚摸屏幕)</div>
+            <canvas id="knot-canvas"></canvas>
+        </div>
+
+        <div class="card">
+            <div class="card-title">🔮 答案之书</div>
+            <div style="min-height:180px; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                <p style="font-size:13px; color:#888; margin-bottom:20px;">默念你的烦恼，点击封面...</p>
+                <div class="oracle-book" onclick="askOracle()">
+                    <div id="oracle-content">
+                        <div style="font-size:40px;">📜</div>
+                        <div>答案之书</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">🩹 情绪急救箱</div>
+            <div class="aid-grid">
+                <div class="aid-item" onclick="useAid('bandaid')"><span class="aid-icon">🩹</span><br><span style="font-size:12px">缝补心碎</span></div>
+                <div class="aid-item" onclick="useAid('pill')"><span class="aid-icon">💊</span><br><span style="font-size:12px">忘忧药</span></div>
+                <div class="aid-item" onclick="useAid('pat')"><span class="aid-icon">👋</span><br><span style="font-size:12px">摸摸头</span></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">📻 晚安电台</div>
+            <div class="radio-box">
+                <div class="radio-screen" id="radio-display">FM 52.0 - Waiting...</div>
+                <div class="radio-controls">
+                    <div class="radio-btn" onclick="playRadio('rain', this)">🌧️</div>
+                    <div class="radio-btn" onclick="playRadio('ocean', this)">🌊</div>
+                    <div class="radio-btn" onclick="playRadio('fire', this)">🔥</div>
+                    <div class="radio-btn" onclick="stopRadio()">⏹️</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">🕳️ 烦恼粉碎机</div>
+            <div style="display:flex; gap:10px; margin-bottom:15px;">
+                <input id="worry-in" placeholder="写下不开心..." style="flex:1; padding:12px; border:1px solid #eee; border-radius:12px; outline:none; background:#f9f9f9;">
+                <button class="btn" onclick="fireBlackHole()" style="padding:10px 20px;">粉碎</button>
+            </div>
+            <canvas id="hole-canvas" class="game-canvas"></canvas>
+        </div>
+
+        <div class="card">
+            <div class="card-title">🎹 治愈钢琴</div>
+            <div class="piano-keys">
+                <div class="key" onclick="note(261, this)">Do</div>
+                <div class="key" onclick="note(293, this)">Re</div>
+                <div class="key" onclick="note(329, this)">Mi</div>
+                <div class="key" onclick="note(392, this)">So</div>
+                <div class="key" onclick="note(440, this)">La</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="page-love" class="page">
+        <div class="card" style="margin-top: 40px;">
+            <div class="card-title">⚖️ 爱意天平</div>
+            <div class="scale-sys" onclick="tipScale()">
+                <div class="scale-pole"></div>
+                <div class="scale-bar" id="scale-bar">
+                    <div class="scale-plate left">☁️</div>
+                    <div class="scale-plate right">❤️</div>
+                </div>
+            </div>
+            <p style="text-align:center; font-size:12px; color:#aaa; margin-top:10px;">点击放入我的爱，看看谁重？</p>
+        </div>
+
+        <div class="card">
+            <div class="card-title">🌊 漂流瓶回响</div>
+            <div class="bottle-container" onclick="throwBottle()">
+                <div class="bottle" id="bottle-emoji">🍾</div>
+                <div class="bottle-wave"></div>
+                <div id="bottle-msg" style="position:absolute; color:#fff; font-weight:bold; opacity:0; text-align:center; padding:10px;"></div>
+            </div>
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <input id="bottle-in" placeholder="把心事装进瓶子..." style="flex:1; padding:10px; border:1px solid #eee; border-radius:10px; outline:none;">
+                <button class="btn" onclick="throwBottle()" style="padding:8px 15px;">扔出</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">🎋 心愿孔明灯</div>
+            <div style="display:flex; gap:10px; margin-bottom:10px;">
+                <input id="wish-in" placeholder="许一个愿望..." style="flex:1; padding:12px; border:1px solid #eee; border-radius:12px; outline:none; background:#f9f9f9;">
+                <button class="btn" onclick="fireLantern()" style="padding:10px 20px;">放飞</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">✨ 星空连线</div>
+            <canvas id="star-canvas" class="game-canvas"></canvas>
+            <div id="star-msg" style="text-align:center; color:var(--accent); font-weight:bold; margin-top:15px; opacity:0; transition:0.5s;"></div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">💌 惊喜刮刮乐</div>
+            <div style="position:relative; height:180px; width:100%; border-radius:20px; overflow:hidden; border:1px solid #eee;">
+                <div style="position:absolute; inset:0; background:#fff0f5; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                    <div style="font-size:40px;">💑</div>
+                    <div style="margin-top:10px; font-weight:bold; color:#555;" id="love-msg">原谅我好不好？</div>
+                </div>
+                <canvas id="scratch-canvas" style="position:absolute; inset:0; cursor:crosshair; touch-action:none;"></canvas>
+            </div>
+            <button class="btn-outline" style="width:100%; margin-top:10px; padding:8px; border-radius:10px;" onclick="resetScratch()">🔄 重新覆盖</button>
+        </div>
+    </div>
+
+</div>
+
+<div id="letter-modal">
+    <div class="letter-paper">
+        <div class="close-letter" onclick="closeLetter()">×</div>
+        <h3 style="color:var(--primary); margin-bottom:15px;">💌 致 王奕婷</h3>
+        <p style="line-height:2; font-size:15px; color:#555; text-align:justify;">
+            王奕婷，希望你看到这些会喜欢，会开心。<br>
+            也希望这个程序可以一直陪着你，在你不开心的时候陪着你，在你想哭的时候陪着你，永远陪着你。<br>
+            <b style="color:#ff9a9e">你以后不许哭鼻子了哦，要开开心心的。</b><br>
+            不开心的时候，就看看这个，让她来哄你开心 ❤️
+        </p>
+    </div>
+</div>
+
+<div class="dock-wrapper">
+    <div class="dock">
+        <div class="dock-item active" onclick="nav('home', this)">🏠</div>
+        <div class="dock-item" onclick="nav('fun', this)">🎡</div>
+        <div class="dock-item" onclick="nav('calm', this)">🍃</div>
+        <div class="dock-item" onclick="nav('love', this)">❤️</div>
+    </div>
+</div>
+
+<div id="settings-modal">
+    <div class="modal-box">
+        <h3>⚙️ 专属定制</h3>
+        <input id="set-name" class="modal-input" placeholder="她的昵称">
+        <input id="set-msg" class="modal-input" placeholder="道歉/表白的话">
+        <button class="btn" onclick="saveSettings()">保存生效</button>
+        <button class="btn-outline" style="margin-top:10px; border:none; background:transparent;" onclick="$('settings-modal').style.display='none'">关闭</button>
+    </div>
+</div>
+
+<script>
+    const $ = id => document.getElementById(id);
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let audio;
+    let w = window.innerWidth, h = window.innerHeight;
+    const fxCvs = $('fx-canvas'); const fxCtx = fxCvs.getContext('2d');
+    fxCvs.width = w; fxCvs.height = h;
+
+    // Config
+    const config = {
+        name: localStorage.getItem('u_name') || '小公主',
+        msg: localStorage.getItem('u_msg') || '对不起，我最爱你了',
+        pet: 'cat'
+    };
+    $('love-msg').innerText = config.msg;
+
+    window.addEventListener('resize', () => { w = window.innerWidth; h = window.innerHeight; fxCvs.width = w; fxCvs.height = h; });
+
+    function initAudio() { if(!audio) audio = new AudioCtx(); }
+    function playTone(freq, type='sine', dur=0.2) {
+        if(!audio) return;
+        const o = audio.createOscillator(); const g = audio.createGain();
+        o.type = type; o.frequency.value = freq;
+        g.gain.setValueAtTime(0.1, audio.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + dur);
+        o.connect(g); g.connect(audio.destination);
+        o.start(); o.stop(audio.currentTime + dur);
+        // [新增] 触发涟漪
+        triggerRipple();
+    }
+    function showToast(msg) {
+        const t = $('toast'); $('t-msg').innerText = msg;
+        t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 2500);
+    }
+    function speak(text) {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'zh-CN'; u.rate = 0.9; u.pitch = 1.1;
+        window.speechSynthesis.speak(u);
+    }
+
+    // Nav
+    function nav(id, el) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        $('page-' + id).classList.add('active');
+        document.querySelectorAll('.dock-item').forEach(i => i.classList.remove('active'));
+        el.classList.add('active');
+        if(id === 'fun') { initGravity(); initBubbles(); }
+        if(id === 'calm') { initBlackHole(); initKnot(); }
+        if(id === 'love') { initStar(); initScratch(); initLanterns(); }
+    }
+
+    // --- 1. 擦眼泪 ---
+    const tcvs = $('tear-canvas'); const tctx = tcvs.getContext('2d');
+    let tearCleared = false, wipeCount = 0;
+    const appShell = $('main-app');
+    function initTear() {
+        tcvs.width = w; tcvs.height = h;
+        tctx.fillStyle = 'rgba(230, 240, 255, 0.95)'; tctx.fillRect(0,0,w,h);
+        tctx.globalCompositeOperation = 'source-over';
+        tctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        for(let i=0; i<30; i++) { tctx.beginPath(); tctx.arc(Math.random()*w, Math.random()*h, Math.random()*15+5, 0, Math.PI*2); tctx.fill(); }
+        tctx.globalCompositeOperation = 'destination-out';
+        const wipe = (e) => {
+            e.preventDefault(); initAudio();
+            const t = e.touches ? e.touches[0] : e;
+            tctx.beginPath(); tctx.arc(t.clientX, t.clientY, 45, 0, Math.PI*2); tctx.fill();
+            wipeCount++;
+            let blur = Math.max(0, 20 - (wipeCount/3));
+            appShell.style.filter = `blur(${blur}px)`;
+            if(wipeCount > 60 && !tearCleared) {
+                tearCleared = true;
+                $('tear-layer').style.opacity = 0;
+                appShell.style.filter = 'blur(0px)'; appShell.style.transform = 'scale(1)';
+                setTimeout(() => $('tear-layer').style.display='none', 1500);
+                showToast("眼泪擦干啦 ✨"); speak("别哭啦，小公主，欢迎回家"); startBlinking();
+            }
+        };
+        tcvs.addEventListener('mousemove', wipe); tcvs.addEventListener('touchmove', wipe);
+    }
+    initTear();
+
+    // --- [新增] 音律涟漪 ---
+    const rCvs = document.getElementById('ripple-canvas');
+    const rCtx = rCvs.getContext('2d');
+    rCvs.width = w; rCvs.height = h;
+    let ripples = [];
+    function triggerRipple() { ripples.push({r: 0, a: 0.6, w: 5}); }
+    function loopRipples() {
+        rCtx.clearRect(0,0,w,h);
+        ripples.forEach((r, i) => {
+            r.r += 5; r.a -= 0.01; r.w -= 0.05;
+            if(r.a <= 0) { ripples.splice(i, 1); return; }
+            rCtx.beginPath(); rCtx.arc(w/2, h/2, r.r, 0, Math.PI*2);
+            rCtx.strokeStyle = `rgba(255, 182, 193, ${r.a})`; rCtx.lineWidth = Math.max(0.5, r.w); rCtx.stroke();
+        });
+        requestAnimationFrame(loopRipples);
+    }
+    loopRipples();
+
+    // --- [新增] 云朵传书 ---
+    const cloudTexts = ["想你了", "抱抱", "贴贴", "今天也要开心", "呼噜呼噜毛", "我在呢", "❤️"];
+    function spawnCloud() {
+        const c = document.createElement('div');
+        c.className = 'cloud-msg';
+        c.innerText = "☁️";
+        c.style.top = Math.random() * 60 + 10 + "%";
+        c.style.left = "-100px";
+        c.style.transition = `left ${20 + Math.random()*10}s linear, transform 0.5s, opacity 0.5s, background 0.3s`;
+        document.getElementById('cloud-layer').appendChild(c);
+        setTimeout(() => c.style.left = "110%", 100);
+        c.onclick = () => {
+            initAudio(); c.innerText = cloudTexts[Math.floor(Math.random()*cloudTexts.length)];
+            c.style.transform = "scale(1.5)"; c.style.background = "#fff0f5"; playTone(600, 'sine', 0.1);
+            setTimeout(() => { c.style.opacity = 0; setTimeout(()=>c.remove(), 500); }, 2000);
+        };
+        setTimeout(() => c.remove(), 35000);
+    }
+    setInterval(spawnCloud, 10000);
+
+    // --- 信件逻辑 ---
+    function openLetter() { initAudio(); $('letter-modal').style.display='flex'; setTimeout(()=>document.querySelector('.letter-paper').classList.add('open'),50); playTone(300,'sine',0.5); }
+    function closeLetter() { document.querySelector('.letter-paper').classList.remove('open'); setTimeout(()=>$('letter-modal').style.display='none',500); }
+
+    // --- 1. 受气包 ---
+    let punchHp=100;
+    function punch(el) {
+        initAudio(); punchHp-=10; if(punchHp<0)punchHp=100; $('hp-bar').style.width=punchHp+"%";
+        el.classList.add('hit'); setTimeout(()=>el.classList.remove('hit'),100);
+        if(punchHp<=0) { el.innerText="🏳️"; $('punch-msg').innerText="我错了！别打啦"; showToast("出气成功！"); }
+        else { el.innerText=["😣","😫","🤕","😭"][Math.floor(Math.random()*4)]; playTone(200,'sawtooth',0.1); if(navigator.vibrate)navigator.vibrate(50); }
+    }
+
+    // --- 2. 逃跑按钮 ---
+    function runButton(btn) {
+        initAudio(); const x=(Math.random()-0.5)*200; const y=(Math.random()-0.5)*100;
+        btn.style.transform=`translate(${x}px, ${y}px)`; playTone(600,'triangle',0.1);
+    }
+    function forgive() { showToast("就知道你最好了 ❤️"); createParticles(w/2, h/2, ['🎉','❤️']); playTone(400,'sine',0.1); }
+
+    // --- 3. 魔镜 ---
+    function revealMirror() {
+        initAudio(); const cover=$('mirror-cover');
+        if(cover.style.opacity==='0')return;
+        cover.style.opacity='0'; playTone(500,'sine',0.5); showToast("魔镜不会撒谎 ✨"); createParticles(w/2, h/2, ['✨']);
+    }
+
+    // --- 4. 天平 ---
+    function tipScale() {
+        initAudio(); $('scale-bar').style.transform="rotate(20deg)";
+        showToast("爱意重于泰山！"); playTone(300,'sine',0.2);
+        setTimeout(()=>{ const c=document.querySelector('.scale-plate.left'); c.innerText="💨"; c.style.transition="1s"; c.style.transform="translate(-50px, -100px) scale(0)"; c.style.opacity="0"; },300);
+    }
+
+    // --- 天气 ---
+    const wc=$('weather-canvas'); const wctx=wc.getContext('2d'); wc.width=w; wc.height=h; let wInterval;
+    function setWeather(type, el) {
+        document.querySelectorAll('.w-btn').forEach(b=>b.classList.remove('active')); el.classList.add('active');
+        document.body.className=''; if(type!=='sunny')document.body.classList.add(type);
+        clearInterval(wInterval); wctx.clearRect(0,0,w,h);
+        if(type==='rainy'||type==='snowy') startPrecipitation(type);
+        if(type==='rainbow') showToast("雨过天晴，彩虹出现🌈");
+        if(type==='sunny') showToast("今天是晴天☀️");
+    }
+    function startPrecipitation(type) {
+        let ps=[]; for(let i=0;i<60;i++) ps.push({x:Math.random()*w, y:Math.random()*h, v:Math.random()*3+2, s:Math.random()*2+1});
+        wInterval = setInterval(() => {
+            wctx.clearRect(0,0,w,h); wctx.fillStyle='rgba(255,255,255,0.8)'; wctx.strokeStyle='rgba(255,255,255,0.5)';
+            ps.forEach(p => {
+                p.y+=p.v; if(p.y>h){p.y=-10; p.x=Math.random()*w;}
+                if(type==='rainy') { wctx.beginPath(); wctx.moveTo(p.x, p.y); wctx.lineTo(p.x, p.y+10); wctx.stroke(); }
+                else { wctx.beginPath(); wctx.arc(p.x, p.y, p.s, 0, Math.PI*2); wctx.fill(); p.x+=Math.sin(p.y/50)*0.5; }
+            });
+        }, 30);
+    }
+
+    let bubblesInit = false;
+    function initBubbles() {
+        if(bubblesInit) return;
+        const g=$('bubble-wrap');
+        for(let i=0; i<25; i++) {
+            const b=document.createElement('div'); b.className='bubble';
+            b.onclick=function(){ if(this.classList.contains('popped'))return; initAudio(); this.classList.add('popped'); playTone(300+Math.random()*200,'square',0.1); if(navigator.vibrate)navigator.vibrate(50); }
+            g.appendChild(b);
+        }
+        bubblesInit=true;
+    }
+
+    const answers=["别想太多","去吃顿好的","开心最重要","听从内心","抱抱自己","会好运的","他已经在反省了","买买买！","再试一次","你是最棒的"];
+    function askOracle() {
+        initAudio(); const book=document.querySelector('.oracle-book'); const content=$('oracle-content');
+        if(book.classList.contains('shake')) return;
+        book.classList.add('shake'); playTone(100,'sawtooth',0.3);
+        setTimeout(() => {
+            book.classList.remove('shake'); const ans=answers[Math.floor(Math.random()*answers.length)];
+            content.innerHTML=`<div style="font-size:18px; font-weight:bold;">${ans}</div>`;
+            showToast("命运的指引 ✨"); setTimeout(()=>{ content.innerHTML=`<div style="font-size:40px;">📜</div><div>答案之书</div>`; },3000);
+        }, 600);
+    }
+
+    function useAid(type) { initAudio(); if(type==='bandaid') { showToast("正在缝补心碎..."); createParticles(w/2, h/2, ['🩹','❤️']); } else if(type==='pill') { showToast("烦恼去无踪！"); createParticles(w/2, h/2, ['💊','✨']); } else if(type==='pat') { showToast("摸摸头，不哭啦"); playTone(400,'sine',0.2); } }
+
+    let radioOsc, radioGain;
+    function playRadio(type, el) {
+        initAudio(); stopRadio();
+        document.querySelectorAll('.radio-btn').forEach(b=>b.classList.remove('active')); el.classList.add('active');
+        radioOsc=audio.createOscillator(); radioGain=audio.createGain();
+        if(type==='rain') $('radio-display').innerText="FM 52.0 - Rainy Mood";
+        else if(type==='ocean') $('radio-display').innerText="FM 52.0 - Ocean Waves";
+        else $('radio-display').innerText="FM 52.0 - Bonfire";
+        const bufSize=audio.sampleRate*2; const buffer=audio.createBuffer(1,bufSize,audio.sampleRate); const data=buffer.getChannelData(0);
+        for(let i=0;i<bufSize;i++) data[i]=Math.random()*2-1;
+        const noise=audio.createBufferSource(); noise.buffer=buffer; noise.loop=true;
+        const filter=audio.createBiquadFilter();
+        if(type==='rain') { filter.type='lowpass'; filter.frequency.value=800; }
+        else if(type==='ocean') { filter.type='lowpass'; filter.frequency.value=300; }
+        else { filter.type='highpass'; filter.frequency.value=1000; }
+        noise.connect(filter); filter.connect(radioGain); radioGain.connect(audio.destination); radioGain.gain.value=0.1;
+        noise.start(); radioOsc=noise;
+    }
+    function stopRadio() { if(radioOsc){try{radioOsc.stop();}catch(e){} radioOsc=null;} document.querySelectorAll('.radio-btn').forEach(b=>b.classList.remove('active')); $('radio-display').innerText="FM 52.0 - Waiting..."; }
+
+    document.addEventListener('mousemove', e=>moveEye(e.clientX, e.clientY));
+    document.addEventListener('touchmove', e=>moveEye(e.touches[0].clientX, e.touches[0].clientY));
+    function moveEye(mx, my) {
+        const ps=[$('pl'), $('pr')];
+        ps.forEach(p=>{ const r=p.getBoundingClientRect(); const x=r.left+r.width/2, y=r.top+r.height/2; const a=Math.atan2(my-y, mx-x); const d=Math.min(4, Math.hypot(mx-x, my-y)/15); p.style.transform=`translate(${Math.cos(a)*d}px, ${Math.sin(a)*d}px)`; });
+    }
+    function startBlinking() { setInterval(()=>{ document.querySelectorAll('.eye').forEach(e=>e.style.height='2px'); setTimeout(()=>document.querySelectorAll('.eye').forEach(e=>e.style.height='24px'), 150); }, 3500); }
+    function petTap() { initAudio(); $('pet').style.transform="scale(0.9)"; setTimeout(()=>$('pet').style.transform="scale(1)",150); showToast("蹭蹭你~"); playTone(400,'sine',0.1); }
+    function petAct(type) { if(type==='hug'){ $('pet').style.transform="scale(1.2)"; showToast("抱紧紧！"); setTimeout(()=>$('pet').style.transform="scale(1)",1000); } else if(type==='feed'){ createParticles(w/2, 200, ['🍖']); showToast("好吃！"); } }
+    let pRole='cat'; function togglePet() { pRole=pRole==='cat'?'dog':'cat'; const p=$('pet'); p.style.transform="scale(0)"; setTimeout(()=>{ p.style.transform="scale(1)"; showToast(pRole==='cat'?'喵喵变身':'修勾变身'); },300); }
+    function signPromise(el) { if(el.classList.contains('signed'))return; el.classList.add('signed'); el.innerText="已生效 ❤️"; el.style.background="var(--accent)"; el.style.color="#fff"; el.style.borderStyle="solid"; showToast("协议达成！"); createParticles(w/2, h/2, ['🌸']); }
+
+    let physCtx, physLoop, balls=[]; const fruits=['🍈','🍊','🍒','🍉','🥥','🍇','🥝','🍓','🥭'];
+    function initGravity() {
+        if(physLoop) return; const c=$('gravity-canvas'); physCtx=c.getContext('2d'); const rect=c.getBoundingClientRect(); c.width=rect.width; c.height=rect.height;
+        for(let i=0; i<10; i++) balls.push({x:Math.random()*c.width, y:10, vx:0, vy:0, r:22, t:fruits[i%fruits.length]});
+        let drag=null; const startD=(x,y)=>balls.forEach(b=>{if(Math.hypot(x-b.x,y-b.y)<30)drag=b;});
+        c.addEventListener('mousedown', e=>startD(e.offsetX, e.offsetY)); c.addEventListener('touchstart', e=>{const r=c.getBoundingClientRect(); startD(e.touches[0].clientX-r.left, e.touches[0].clientY-r.top)});
+        window.addEventListener('mouseup', ()=>drag=null); window.addEventListener('touchend', ()=>drag=null);
+        c.addEventListener('mousemove', e=>{if(drag){drag.x=e.offsetX; drag.y=e.offsetY; drag.vx=0; drag.vy=0;}}); c.addEventListener('touchmove', e=>{if(drag){e.preventDefault(); const r=c.getBoundingClientRect(); drag.x=e.touches[0].clientX-r.left; drag.y=e.touches[0].clientY-r.top; drag.vx=0; drag.vy=0;}});
+        window.addEventListener('devicemotion', e=>{if(e.accelerationIncludingGravity){const gx=e.accelerationIncludingGravity.x||0, gy=e.accelerationIncludingGravity.y||0; balls.forEach(b=>{b.vx-=gx*0.5; b.vy+=gy*0.5;});}});
+        loopGravity();
+    }
+    function loopGravity() {
+        const c=$('gravity-canvas'); physCtx.clearRect(0,0,c.width,c.height);
+        balls.forEach(b=>{
+            b.vy+=0.5; b.vx*=0.95; b.vy*=0.95; b.x+=b.vx; b.y+=b.vy;
+            if(b.x>c.width-b.r){b.x=c.width-b.r; b.vx*=-0.7;} if(b.x<b.r){b.x=b.r; b.vx*=-0.7;} if(b.y>c.height-b.r){b.y=c.height-b.r; b.vy*=-0.6;} if(b.y<b.r){b.y=b.r; b.vy*=-0.6;}
+            physCtx.font="30px Arial"; physCtx.textAlign="center"; physCtx.textBaseline="middle"; physCtx.fillText(b.t, b.x, b.y);
+        });
+        physLoop=requestAnimationFrame(loopGravity);
+    }
+
+    let knotCtx, knotLines=[], knotCleared=false;
+    function initKnot() {
+        const c=$('knot-canvas'); if(knotLines.length>0)return; c.width=c.offsetWidth; c.height=c.offsetHeight; knotCtx=c.getContext('2d');
+        for(let i=0; i<50; i++) knotLines.push({x:c.width/2+(Math.random()-0.5)*100, y:c.height/2+(Math.random()-0.5)*100, cp1x:Math.random()*c.width, cp1y:Math.random()*c.height, cp2x:Math.random()*c.width, cp2y:Math.random()*c.height, color:'#888'});
+        drawKnot();
+        const untangle=(e)=>{
+            e.preventDefault(); if(knotCleared)return; initAudio();
+            knotLines.forEach(l=>{ l.color=`hsl(${Math.random()*60+300}, 80%, 70%)`; l.x+=(c.width/2-l.x)*0.05; l.y+=(c.height/2-l.y)*0.05; });
+            drawKnot();
+            if(Math.abs(knotLines[0].x-c.width/2)<5) { knotCleared=true; showToast("心结解开啦 ❤️"); createParticles(c.width/2+c.getBoundingClientRect().left, c.height/2+c.getBoundingClientRect().top, ['❤️']); }
+        };
+        c.addEventListener('mousemove', untangle); c.addEventListener('touchmove', untangle);
+    }
+    function drawKnot() {
+        knotCtx.clearRect(0,0,1000,1000); knotCtx.lineWidth=2;
+        knotLines.forEach(l=>{ knotCtx.strokeStyle=l.color; knotCtx.beginPath(); knotCtx.moveTo(l.x, l.y); knotCtx.bezierCurveTo(l.cp1x, l.cp1y, l.cp2x, l.cp2y, l.x, l.y); knotCtx.stroke(); });
+    }
+
+    let lanternCtx, lanternList=[];
+    function initLanterns() { const c=$('lantern-canvas'); c.width=w; c.height=h; lanternCtx=c.getContext('2d'); loopLanterns(); }
+    function fireLantern() { const v=$('wish-in').value; if(!v)return; $('wish-in').value=''; lanternList.push({x:Math.random()*w, y:h+50, v:1+Math.random(), text:v, alpha:1}); showToast("愿望已发送 ✨"); }
+    function loopLanterns() { lanternCtx.clearRect(0,0,w,h); for(let i=0; i<lanternList.length; i++) { let l=lanternList[i]; l.y-=l.v; l.alpha-=0.002; lanternCtx.fillStyle=`rgba(255, 165, 0, ${l.alpha})`; lanternCtx.beginPath(); lanternCtx.arc(l.x, l.y, 10, 0, Math.PI*2); lanternCtx.fill(); lanternCtx.fillStyle=`rgba(255, 255, 255, ${l.alpha})`; lanternCtx.font="12px Arial"; lanternCtx.fillText(l.text, l.x+15, l.y); if(l.alpha<=0)lanternList.splice(i,1); } requestAnimationFrame(loopLanterns); }
+
+    function throwBottle() {
+        initAudio(); const msg=$('bottle-in').value||"不开心..."; $('bottle-in').value=""; const b=$('bottle-emoji');
+        b.style.transition="1s ease-in"; b.style.transform="translate(200px, -50px) rotate(45deg) scale(0.5)"; b.style.opacity="0";
+        showToast("心事瓶已飘走~"); playTone(400,'sine',0.2);
+        setTimeout(()=>{
+            const replies=["我在听","抱抱你","别难过啦","一直在","呼噜呼噜毛","今晚月色真美","收到啦"]; const reply=replies[Math.floor(Math.random()*replies.length)];
+            b.style.transition="none"; b.style.transform="translate(-200px, 0px) rotate(-45deg) scale(0.5)";
+            setTimeout(()=>{
+                b.style.transition="1s ease-out"; b.style.transform="translate(0, 0) rotate(0) scale(1)"; b.style.opacity="1";
+                setTimeout(()=>{ const txt=$('bottle-msg'); txt.innerText="💌 "+reply; txt.style.opacity=1; showToast("收到一个回信！"); speak(reply); setTimeout(()=>{txt.style.opacity=0;},3000); },1000);
+            },100);
+        },2000);
+    }
+
+    function fAct(t, el) { initAudio(); const i=el.querySelector('.f-icon'); if(t==='durian'){i.innerText='🧎'; showToast("态度诚恳！"); setTimeout(()=>i.innerText='🍈',1500);} else if(t==='grape'){el.style.transform='scale(0.8)'; setTimeout(()=>el.style.transform='scale(1)',150); playTone(600,'triangle',0.1);} else if(t==='cherry'){i.style.transform='rotate(360deg)'; setTimeout(()=>i.style.transform='',500);} else {showToast('爱你哟'); createParticles(w/2, h/2, ['❤️']);} }
+    function playVm() { initAudio(); const items=['💍','💄','🧁','🧸','💌','🌟','🍬']; const r=items[Math.floor(Math.random()*items.length)]; $('vm-res').innerText=r; $('vm-res').style.transform="translateY(10px)"; playTone(800,'square',0.1); setTimeout(()=>{ $('vm-res').style.transform="translateY(0)"; showToast("获得: "+r); createParticles(w/2, h/2, [r]); },200); }
+    let hCtx, hList=[];
+    function initBlackHole() { const c=$('hole-canvas'); hCtx=c.getContext('2d'); c.width=c.offsetWidth; c.height=c.offsetHeight; loopHole(); }
+    function fireBlackHole() { const v=$('worry-in').value; if(!v)return; $('worry-in').value=''; speak("粉碎烦恼"); for(let i=0;i<v.length;i++) hList.push({x:Math.random()*200, y:200, vx:(Math.random()-.5)*2, vy:-5, c:v[i]}); }
+    function loopHole() { hCtx.fillStyle='rgba(0,0,0,0.2)'; hCtx.fillRect(0,0,1000,1000); const cx=$('hole-canvas').width/2, cy=$('hole-canvas').height/2; hCtx.beginPath(); hCtx.arc(cx,cy,15,0,Math.PI*2); hCtx.fillStyle='#f00'; hCtx.fill(); for(let i=0;i<hList.length;i++){ let p=hList[i], dx=cx-p.x, dy=cy-p.y, a=Math.atan2(dy,dx); p.vx+=Math.cos(a)*0.5; p.vy+=Math.sin(a)*0.5; p.x+=p.vx; p.y+=p.vy; hCtx.fillStyle='#fff'; hCtx.fillText(p.c, p.x, p.y); if(Math.hypot(dx,dy)<10) hList.splice(i,1); } requestAnimationFrame(loopHole); }
+    function note(f, el) { initAudio(); el.classList.add('active'); setTimeout(()=>el.classList.remove('active'),150); playTone(f,'sine',0.5); createParticles(el.getBoundingClientRect().left+15, el.getBoundingClientRect().top, ['🎵']); }
+
+    let sCtx, stars=[], lines=[];
+    function initStar() { const c=$('star-canvas'); sCtx=c.getContext('2d'); const r=c.getBoundingClientRect(); c.width=r.width; c.height=r.height; stars=[]; for(let i=0;i<Math.PI*2;i+=0.6) stars.push({x:c.width/2+16*Math.pow(Math.sin(i),3)*5, y:c.height/2-(13*Math.cos(i)-5*Math.cos(2*i)-2*Math.cos(3*i)-Math.cos(4*i))*5, ok:false}); drawStar(); c.addEventListener('touchmove', e=>{e.preventDefault(); const t=e.touches[0]; const b=c.getBoundingClientRect(); const x=t.clientX-b.left, y=t.clientY-b.top; stars.forEach(s=>{if(Math.hypot(x-s.x,y-s.y)<20)s.ok=true;}); lines.push({x,y}); drawStar(); if(stars.every(s=>s.ok)) { $('star-msg').innerText=config.msg; $('star-msg').style.opacity=1; }}); }
+    function drawStar() { sCtx.clearRect(0,0,1000,1000); stars.forEach(s=>{ sCtx.beginPath(); sCtx.arc(s.x,s.y,4,0,Math.PI*2); sCtx.fillStyle=s.ok?'red':'#fff'; sCtx.fill(); }); sCtx.beginPath(); sCtx.strokeStyle='rgba(255,255,255,0.5)'; if(lines.length){sCtx.moveTo(lines[0].x, lines[0].y); lines.forEach(l=>sCtx.lineTo(l.x,l.y)); sCtx.stroke();} }
+
+    const sc=$('scratch-canvas'), sct=sc.getContext('2d');
+    function initScratch() { const p=sc.parentElement; sc.width=p.offsetWidth; sc.height=p.offsetHeight; sct.fillStyle='#ddd'; sct.fillRect(0,0,sc.width, sc.height); sct.fillStyle='#888'; sct.font="20px Arial"; sct.fillText("这里有灰尘 (擦掉)", 50, 90); sct.globalCompositeOperation='destination-out'; const m=(e)=>{e.preventDefault(); const t=e.touches?e.touches[0]:e; const r=sc.getBoundingClientRect(); sct.beginPath(); sct.arc(t.clientX-r.left, t.clientY-r.top, 25, 0, Math.PI*2); sct.fill();}; sc.addEventListener('mousemove', m); sc.addEventListener('touchmove', m); }
+    function resetScratch() { sct.globalCompositeOperation='source-over'; initScratch(); }
+
+    let parts=[]; function createParticles(x,y,c){for(let i=0;i<10;i++)parts.push({x,y,vx:(Math.random()-.5)*10,vy:(Math.random()-.5)*10,c:c[0],l:1}); loopFx();}
+    function loopFx(){ fxCtx.clearRect(0,0,w,h); let a=false; parts.forEach(p=>{if(p.l<=0)return; a=true; p.x+=p.vx; p.y+=p.vy; p.vy+=0.5; p.l-=0.02; fxCtx.font="24px Arial"; fxCtx.globalAlpha=p.l; fxCtx.fillText(p.c,p.x,p.y);}); if(a)requestAnimationFrame(loopFx); }
+    function openSettings(){$('settings-modal').style.display='flex'; $('set-name').value=config.name; $('set-msg').value=config.msg;}
+    function saveSettings(){ config.name=$('set-name').value||config.name; config.msg=$('set-msg').value||config.msg; localStorage.setItem('u_name',config.name); localStorage.setItem('u_msg',config.msg); $('user-name').innerText=config.name; $('love-msg').innerText=config.msg; $('settings-modal').style.display='none'; showToast("已保存"); }
+    window.onload = () => { setWeather('sunny', document.querySelector('.w-btn')); }
+</script>
+</body>
 </html>
